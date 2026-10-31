@@ -1,4 +1,4 @@
-const SUPPORTED_LANGS = ['fr', 'en', 'de', 'es', 'it', 'pt', 'ja'];
+export const SUPPORTED_LANGS =['fr', 'en', 'de', 'es', 'it', 'pt', 'ja'];
 const MAX_DETAILS = 8;
 
 export function normalizeNumber(raw) {
