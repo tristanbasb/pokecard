@@ -43,6 +43,7 @@ main() {
   cd "$dir"
 
   step "Dépendances"
+  systemctl stop "$service" 2>/dev/null || true
   # better-sqlite3 ships its binaries; without this flag npm tries to compile it from source anyway.
   npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
 
