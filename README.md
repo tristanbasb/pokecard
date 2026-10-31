@@ -4,47 +4,23 @@ Application web locale pour cataloguer une collection de cartes Pokémon depuis 
 
 ## Installation dans le LXC (Debian ou Ubuntu)
 
-1. Installe Node.js 24, en root dans le conteneur:
+En root dans le conteneur (installe `curl` d'abord s'il manque: `apt update && apt install -y curl`):
 
-   ```bash
-   curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
-   apt install -y nodejs
-   ```
+```bash
+curl -fsSL https://raw.githubusercontent.com/tristanbasb/pokecard/main/deploy/install.sh | bash
+```
 
-2. Copie le projet depuis ton PC, dans Git Bash et depuis le dossier du projet. Seuls les fichiers commités sont envoyés:
+Le script installe Node.js 24, place l'app dans `/opt/pokecard`, te demande ta clé API Anthropic et un code PIN, puis démarre le service et affiche l'adresse à ouvrir. Tu peux le relancer sans risque: il ne touche ni à `.env` ni à `data/`.
 
-   ```bash
-   git archive HEAD | ssh root@IP_DU_LXC "mkdir -p /opt/pokecard && tar -x -C /opt/pokecard"
-   ```
+Ta clé et ton PIN sont rangés dans `/opt/pokecard/.env`, lisible par root seulement. Pour les changer, modifie ce fichier puis lance `systemctl restart pokecard`.
 
-3. Dans le conteneur, crée l'utilisateur du service et installe les dépendances:
+## Mise à jour
 
-   ```bash
-   useradd --system --home /opt/pokecard --shell /usr/sbin/nologin pokecard
-   cd /opt/pokecard
-   npm ci --omit=dev
-   ```
+```bash
+pokecard-update
+```
 
-   Si `better-sqlite3` n'a pas de binaire précompilé pour ton système, lance `apt install -y build-essential python3`, puis relance `npm ci --omit=dev`.
-
-4. Configure l'app. Renseigne au minimum `ANTHROPIC_API_KEY`, et de préférence `PIN`:
-
-   ```bash
-   cp .env.example .env
-   nano .env
-   mkdir -p data
-   chown -R pokecard:pokecard /opt/pokecard
-   chmod 600 .env
-   ```
-
-5. Active le service:
-
-   ```bash
-   cp deploy/pokecard.service /etc/systemd/system/
-   systemctl daemon-reload
-   systemctl enable --now pokecard
-   systemctl status pokecard
-   ```
+La commande récupère la dernière version sur GitHub. Elle sauvegarde d'abord la base dans `data/backups/` (5 dernières copies gardées). Si l'app ne répond plus après la mise à jour, elle revient à la version précédente et restaure la base.
 
 ## Sur le téléphone
 
