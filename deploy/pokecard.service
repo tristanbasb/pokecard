@@ -1,0 +1,22 @@
+[Unit]
+Description=Pokécard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pokecard
+Group=pokecard
+WorkingDirectory=/opt/pokecard
+EnvironmentFile=/opt/pokecard/.env
+ExecStart=/usr/bin/node src/main.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/pokecard/data
+
+[Install]
+WantedBy=multi-user.target
