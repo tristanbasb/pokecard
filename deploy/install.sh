@@ -43,11 +43,8 @@ main() {
   cd "$dir"
 
   step "Dépendances"
-  if ! npm ci --omit=dev --no-audit --no-fund --loglevel=error; then
-    echo "Nouvel essai avec les outils de compilation."
-    apt-get install -y -qq build-essential python3 >/dev/null
-    npm ci --omit=dev --no-audit --no-fund --loglevel=error
-  fi
+  # better-sqlite3 ships its binaries; without this flag npm tries to compile it from source anyway.
+  npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
 
   step "Configuration"
   mkdir -p data

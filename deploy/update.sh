@@ -33,7 +33,7 @@ main() {
   trap rollback ERR
 
   git merge --quiet --ff-only "$latest"
-  npm ci --omit=dev --no-audit --no-fund --loglevel=error
+  npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
   install_unit
   systemctl start "$SERVICE"
   wait_healthy || { echo "Le service ne répond pas après la mise à jour."; rollback; }
@@ -78,7 +78,7 @@ rollback() {
   echo "Échec: retour à la version précédente ($(git rev-parse --short "$PREVIOUS"))."
   systemctl stop "$SERVICE"
   git reset --quiet --hard "$PREVIOUS"
-  npm ci --omit=dev --no-audit --no-fund --loglevel=error
+  npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
   install_unit
   rm -f data/pokecard.sqlite*
   if compgen -G "$BACKUP/pokecard.sqlite*" >/dev/null; then
