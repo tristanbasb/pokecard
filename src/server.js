@@ -4,6 +4,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import { getCard, getScan, upsertCard } from './db.js';
 import { addToCollection, deleteRow, listCollection, updateRow } from './collection.js';
+import { toCsv } from './csv.js';
 import { SUPPORTED_LANGS } from './matching.js';
 import { getPriceHistory, refreshCard, refreshPrices } from './pricing.js';
 import { TcgdexUnavailable } from './tcgdex.js';
@@ -85,9 +86,10 @@ export function buildApp({
   });
 
   app.post('/api/scan', async (req, reply) => {
-    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
-      return reply.code(400).send({ message: 'Photo manquante.' });
+    if (req.headers['content-type'] !== 'image/jpeg') {
+      return reply.code(415).send({ message: 'La photo doit être au format JPEG.' });
     }
+    if (!req.body?.length) return reply.code(400).send({ message: 'Photo manquante.' });
     return scanner.scan(req.body);
   });
 
@@ -147,6 +149,11 @@ export function buildApp({
   });
 
   app.get('/api/collection', async (req) => listCollection(db, req.query));
+
+  app.get('/api/export.csv', async (_req, reply) => reply
+    .type('text/csv; charset=utf-8')
+    .header('content-disposition', 'attachment; filename="pokecard-collection.csv"')
+    .send(toCsv(listCollection(db, { sort: 'name' }).rows)));
 
   app.post('/api/prices/refresh', async (req, reply) => {
     const { id, lang } = req.body ?? {};
