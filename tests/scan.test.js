@@ -51,6 +51,7 @@ test('a successful scan stores photo, card, response and tokens', async () => {
   assert.equal(result.ambiguous, false);
   assert.equal(result.price, 0.23);
   assert.equal(result.photoUrl, `/photos/${result.scanId}.jpg`);
+  assert.equal(result.metric, 'trend');
   assert.deepEqual(result.identification, identification);
   assert.deepEqual(readFileSync(join(photosDir, `${result.scanId}.jpg`)), jpeg);
   assert.equal(getCard(db, 'swsh3-136', 'fr').name, 'Fouinar');

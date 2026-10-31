@@ -79,6 +79,7 @@ export function createScanner({ db, identify, tcgdex, photosDir }) {
     for (const card of [match.card, ...match.alternatives]) upsertCard(db, card);
     return result(scanId, 'done', {
       identification,
+      metric,
       card: match.card,
       alternatives: match.alternatives.map((card) => ({
         ...card,
