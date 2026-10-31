@@ -4,7 +4,7 @@ import {
 } from './dom.js';
 import { resizeImage } from './image.js';
 
-export function renderScanView(root) {
+export function renderScanView(root, { initialResult } = {}) {
   const input = el('input', {
     type: 'file', accept: 'image/*', capture: 'environment', className: 'visually-hidden', id: 'photo-input',
   });
@@ -181,7 +181,8 @@ export function renderScanView(root) {
     }
   });
 
-  showIdle();
+  if (initialResult) showResult(initialResult);
+  else showIdle();
 }
 
 function manualSearch({

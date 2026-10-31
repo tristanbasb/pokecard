@@ -1,24 +1,31 @@
 import * as api from './api.js';
 import { el } from './dom.js';
+import { renderCollectionView } from './collection-view.js';
 import { renderScanView } from './scan-view.js';
+import { renderSettingsView } from './settings-view.js';
 
 const main = document.querySelector('main');
 const nav = document.querySelector('nav');
 
 const VIEWS = {
   scan: ['Scanner', renderScanView],
+  collection: ['Collection', renderCollectionView],
+  settings: ['Réglages', renderSettingsView],
 };
 
 let current = 'scan';
 
-function showView(name) {
+function showView(name, options = {}) {
   current = name;
   nav.hidden = false;
   for (const button of nav.querySelectorAll('button')) {
     if (button.dataset.view === name) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
-  VIEWS[name][1](main);
+  VIEWS[name][1](main, {
+    ...options,
+    openScanResult: (initialResult) => showView('scan', { initialResult }),
+  });
 }
 
 function showLogin() {

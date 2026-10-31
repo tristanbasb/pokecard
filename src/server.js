@@ -2,7 +2,9 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
-import { getCard, getScan, upsertCard } from './db.js';
+import {
+  getCard, getScan, getSetting, listScans, setSetting, upsertCard,
+} from './db.js';
 import { addToCollection, deleteRow, listCollection, updateRow } from './collection.js';
 import { toCsv } from './csv.js';
 import { SUPPORTED_LANGS } from './matching.js';
@@ -12,6 +14,7 @@ import { TcgdexUnavailable } from './tcgdex.js';
 const BODY_LIMIT = 10 * 1024 * 1024;
 const SESSION_COOKIE = 'session';
 const YEAR_SECONDS = 365 * 24 * 3600;
+const PRICE_METRICS = ['trend', 'low', 'avg30'];
 
 const sessionToken = (pin) => createHmac('sha256', pin).update('pokecard-session').digest('hex');
 
@@ -161,6 +164,25 @@ export function buildApp({
     const card = await refreshCard(db, tcgdex, id, lang);
     return card ? { card } : notFound(reply, 'Carte introuvable.');
   });
+
+  const readSettings = () => ({ priceMetric: getSetting(db, 'priceMetric', 'trend') });
+
+  app.get('/api/settings', async () => readSettings());
+
+  app.put('/api/settings', async (req) => {
+    const { priceMetric } = req.body ?? {};
+    if (!PRICE_METRICS.includes(priceMetric)) throw new RangeError('Repère de prix invalide');
+    setSetting(db, 'priceMetric', priceMetric);
+    return readSettings();
+  });
+
+  app.get('/api/scans', async (req) => listScans(db, req.query.status ?? 'pending').map((scan) => ({
+    id: scan.id,
+    createdAt: scan.createdAt,
+    status: scan.status,
+    photoUrl: scan.photoPath ? `/photos/${scan.photoPath}` : null,
+    name: scan.response?.identification?.name ?? null,
+  })));
 
   return app;
 }
