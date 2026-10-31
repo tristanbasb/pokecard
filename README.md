@@ -11,10 +11,10 @@ Application web locale pour cataloguer une collection de cartes Pokémon depuis 
    apt install -y nodejs
    ```
 
-2. Copie le projet depuis ton PC, sans `node_modules`, `data` ni `.env`:
+2. Copie le projet depuis ton PC, dans Git Bash et depuis le dossier du projet. Seuls les fichiers commités sont envoyés:
 
    ```bash
-   rsync -a --exclude node_modules --exclude data --exclude .env --exclude .git --exclude .superpowers ./ root@IP_DU_LXC:/opt/pokecard/
+   git archive HEAD | ssh root@IP_DU_LXC "mkdir -p /opt/pokecard && tar -x -C /opt/pokecard"
    ```
 
 3. Dans le conteneur, crée l'utilisateur du service et installe les dépendances:

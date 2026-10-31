@@ -58,45 +58,68 @@ export async function renderSettingsView(root, { openScanResult }) {
     metricStatus.textContent = error.message;
   }
 
-  async function loadPending() {
+  function scanRow(scan, actionLabel) {
+    const status = el('p', { className: 'muted', role: 'status' });
+    const row = el('div', { className: 'row row--static' });
+    const action = el('button', {
+      className: 'button',
+      onclick: async () => {
+        action.disabled = true;
+        status.textContent = 'Un instant…';
+        try {
+          const result = await api.retryScan(scan.id);
+          if (result.status === 'done') openScanResult(result);
+          else {
+            status.textContent = result.message;
+            action.disabled = false;
+          }
+        } catch (error) {
+          status.textContent = error.message;
+          action.disabled = false;
+        }
+      },
+    }, actionLabel);
+    const dismiss = el('button', {
+      className: 'button',
+      onclick: async () => {
+        try {
+          await api.dismissScan(scan.id);
+          row.remove();
+        } catch (error) {
+          status.textContent = error.message;
+        }
+      },
+    }, 'Ignorer');
+    fill(
+      row,
+      scan.photoUrl ? el('img', { className: 'card-image', src: scan.photoUrl, alt: 'Photo du scan' }) : null,
+      el('span', { className: 'row__body' },
+        el('strong', {}, scan.name ?? 'Carte non lue'),
+        el('span', { className: 'muted' }, new Date(scan.createdAt).toLocaleString('fr-FR')),
+        action,
+        dismiss,
+        status),
+    );
+    return row;
+  }
+
+  async function loadScans() {
     try {
-      const scans = await api.listPendingScans();
+      const [waiting, unconfirmed] = await Promise.all([api.listScans('pending'), api.listScans('unconfirmed')]);
       fill(
         pending,
         el('h2', {}, 'Scans en attente'),
-        scans.length === 0 ? el('p', { className: 'muted' }, 'Aucun scan en attente.') : null,
-        scans.map((scan) => {
-          const status = el('p', { className: 'muted', role: 'status' });
-          const retry = el('button', {
-            className: 'button',
-            onclick: async () => {
-              retry.disabled = true;
-              status.textContent = 'Nouvel essai…';
-              try {
-                const result = await api.retryScan(scan.id);
-                if (result.status === 'done') openScanResult(result);
-                else {
-                  status.textContent = result.message;
-                  retry.disabled = false;
-                }
-              } catch (error) {
-                status.textContent = error.message;
-                retry.disabled = false;
-              }
-            },
-          }, 'Réessayer');
-          return el('div', { className: 'row row--static' },
-            scan.photoUrl ? el('img', { className: 'card-image', src: scan.photoUrl, alt: 'Photo du scan' }) : null,
-            el('span', { className: 'row__body' },
-              el('strong', {}, scan.name ?? 'Carte non lue'),
-              el('span', { className: 'muted' }, new Date(scan.createdAt).toLocaleString('fr-FR')),
-              retry,
-              status));
-        }),
+        waiting.length === 0 ? el('p', { className: 'muted' }, 'Aucun scan en attente.') : null,
+        waiting.map((scan) => scanRow(scan, 'Réessayer')),
+        el('h2', {}, 'Scans à confirmer'),
+        unconfirmed.length === 0
+          ? el('p', { className: 'muted' }, 'Aucun scan à confirmer.')
+          : el('p', { className: 'muted' }, 'Ces cartes ont été lues mais pas ajoutées à ta collection.'),
+        unconfirmed.map((scan) => scanRow(scan, 'Reprendre')),
       );
     } catch (error) {
       fill(pending, el('p', { className: 'muted' }, error.message));
     }
   }
-  loadPending();
+  loadScans();
 }

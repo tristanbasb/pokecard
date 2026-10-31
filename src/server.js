@@ -3,9 +3,11 @@ import Fastify from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import {
-  getCard, getScan, getSetting, listScans, setSetting, upsertCard,
+  getCard, getScan, getSetting, listScans, listUnconfirmedScans, setSetting, updateScan, upsertCard,
 } from './db.js';
-import { addToCollection, deleteRow, listCollection, updateRow } from './collection.js';
+import {
+  addToCollection, deleteRow, getRow, listCollection, updateRow,
+} from './collection.js';
 import { toCsv } from './csv.js';
 import { SUPPORTED_LANGS } from './matching.js';
 import { getPriceHistory, refreshCard, refreshPrices } from './pricing.js';
@@ -30,6 +32,11 @@ function assertLang(lang) {
 
 function createManualCard(db, { name, setName, number }, lang) {
   if (typeof name !== 'string' || !name.trim()) throw new RangeError('Nom de carte requis');
+  const known = db.prepare(`
+    SELECT id FROM cards WHERE id LIKE 'manual-%' AND lang = ? AND name = ? AND number IS ?
+  `).get(lang, name.trim(), number ?? null);
+  if (known) return known.id;
+
   const id = `manual-${randomUUID()}`;
   upsertCard(db, {
     id,
@@ -70,8 +77,10 @@ export function buildApp({
   });
 
   app.addHook('onRequest', async (req, reply) => {
-    if (!pin || req.url === '/api/login') return;
-    if (!req.url.startsWith('/api/') && !req.url.startsWith('/photos/')) return;
+    // The matched route, not req.url: the router decodes the path, so "/%61pi/..." reaches "/api/...".
+    const route = req.routeOptions.url;
+    if (!pin || route === '/api/login') return;
+    if (!route?.startsWith('/api/') && !route?.startsWith('/photos/')) return;
     if (!sameSecret(req.cookies[SESSION_COOKIE], sessionToken(pin))) {
       reply.code(401).send({ message: 'Code PIN requis.' });
     }
@@ -118,6 +127,10 @@ export function buildApp({
   app.post('/api/collection', async (req, reply) => {
     const { cardId, lang, variant, condition, quantity, note, scanId, manualCard } = req.body ?? {};
     assertLang(lang);
+
+    const previous = scanId ? getScan(db, scanId)?.collectionId : null;
+    const already = previous ? getRow(db, previous) : null;
+    if (already) return reply.code(201).send(already);
 
     let id = cardId;
     if (manualCard) {
@@ -176,13 +189,24 @@ export function buildApp({
     return readSettings();
   });
 
-  app.get('/api/scans', async (req) => listScans(db, req.query.status ?? 'pending').map((scan) => ({
-    id: scan.id,
-    createdAt: scan.createdAt,
-    status: scan.status,
-    photoUrl: scan.photoPath ? `/photos/${scan.photoPath}` : null,
-    name: scan.response?.identification?.name ?? null,
-  })));
+  app.get('/api/scans', async (req) => {
+    const status = req.query.status ?? 'pending';
+    const scans = status === 'unconfirmed' ? listUnconfirmedScans(db) : listScans(db, status);
+    return scans.map((scan) => ({
+      id: scan.id,
+      createdAt: scan.createdAt,
+      status: scan.status,
+      photoUrl: scan.photoPath ? `/photos/${scan.photoPath}` : null,
+      name: scan.response?.identification?.name ?? null,
+    }));
+  });
+
+  app.post('/api/scans/:id/dismiss', async (req, reply) => {
+    const id = Number(req.params.id);
+    if (!getScan(db, id)) return notFound(reply, 'Scan introuvable.');
+    updateScan(db, id, { status: 'dismissed' });
+    return reply.code(204).send();
+  });
 
   return app;
 }

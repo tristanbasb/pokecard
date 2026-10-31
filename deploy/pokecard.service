@@ -13,10 +13,6 @@ ExecStart=/usr/bin/node src/main.js
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-PrivateTmp=true
-ReadWritePaths=/opt/pokecard/data
 
 [Install]
 WantedBy=multi-user.target

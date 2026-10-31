@@ -159,6 +159,10 @@ export function listScans(db, status) {
   return db.prepare('SELECT * FROM scans WHERE status = ? ORDER BY id').all(status).map(rowToScan);
 }
 
+export function listUnconfirmedScans(db) {
+  return db.prepare("SELECT * FROM scans WHERE status = 'done' AND collection_id IS NULL ORDER BY id").all().map(rowToScan);
+}
+
 export function getSetting(db, key, fallback) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? row.value : fallback;

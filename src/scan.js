@@ -1,26 +1,25 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
-import { getScan, getSetting, insertScan, updateScan, upsertCard } from './db.js';
+import {
+  getCard, getScan, getSetting, insertScan, updateScan, upsertCard,
+} from './db.js';
 import { findCard } from './matching.js';
-import { priceFor } from './pricing.js';
+import { hasPrice, priceFor } from './pricing.js';
 import { TcgdexUnavailable } from './tcgdex.js';
 
-const RETRYABLE = [
-  Anthropic.APIConnectionError,
-  Anthropic.RateLimitError,
-  Anthropic.InternalServerError,
-  Anthropic.AuthenticationError,
-  Anthropic.PermissionDeniedError,
-];
+const OUTAGES = [Anthropic.APIConnectionError, Anthropic.RateLimitError, Anthropic.InternalServerError];
 
 const NOT_READ = 'Carte non reconnue. Reprends la photo ou saisis le nom.';
 const NOT_FOUND = 'Carte introuvable dans la base. Choisis-la à la main ou enregistre-la sans prix.';
 const CLAUDE_DOWN = 'Claude est indisponible. La photo est gardée, tu pourras réessayer depuis Réglages.';
+const CLAUDE_REJECTED = 'Claude a refusé la requête (clé API ou crédit, détail dans les journaux du serveur). La photo est gardée, tu pourras réessayer depuis Réglages.';
 const TCGDEX_DOWN = 'La base de cartes est indisponible. La lecture est gardée, tu pourras réessayer depuis Réglages.';
 const FAILED = 'Cette photo n\'a pas pu être lue. Reprends la photo ou saisis le nom.';
 
-export function createScanner({ db, identify, tcgdex, photosDir }) {
+export function createScanner({
+  db, identify, tcgdex, photosDir, log = console.error,
+}) {
   const photoFile = (scanId) => join(photosDir, `${scanId}.jpg`);
 
   const result = (scanId, status, fields = {}) => ({
@@ -34,6 +33,13 @@ export function createScanner({ db, identify, tcgdex, photosDir }) {
     price: null,
     ...fields,
   });
+
+  function store(fresh) {
+    const cached = hasPrice(fresh) ? null : getCard(db, fresh.id, fresh.lang);
+    const card = cached ? { ...fresh, prices: cached.prices } : fresh;
+    upsertCard(db, card);
+    return card;
+  }
 
   async function read(scanId, image) {
     const stored = getScan(db, scanId).response?.identification;
@@ -52,9 +58,12 @@ export function createScanner({ db, identify, tcgdex, photosDir }) {
     try {
       identification = await read(scanId, image);
     } catch (error) {
-      const status = RETRYABLE.some((type) => error instanceof type) ? 'pending' : 'failed';
+      log(`Scan ${scanId}: lecture en échec`, error);
+      const outage = OUTAGES.some((type) => error instanceof type);
+      const status = error instanceof Anthropic.APIError ? 'pending' : 'failed';
       updateScan(db, scanId, { status });
-      return result(scanId, status, { message: status === 'pending' ? CLAUDE_DOWN : FAILED });
+      if (status === 'failed') return result(scanId, status, { message: FAILED });
+      return result(scanId, status, { message: outage ? CLAUDE_DOWN : CLAUDE_REJECTED });
     }
 
     let match;
@@ -76,17 +85,17 @@ export function createScanner({ db, identify, tcgdex, photosDir }) {
     }
 
     const metric = getSetting(db, 'priceMetric', 'trend');
-    for (const card of [match.card, ...match.alternatives]) upsertCard(db, card);
+    const card = store(match.card);
     return result(scanId, 'done', {
       identification,
       metric,
-      card: match.card,
-      alternatives: match.alternatives.map((card) => ({
-        ...card,
-        price: priceFor(card, identification.variant, metric),
+      card,
+      alternatives: match.alternatives.map(store).map((alternative) => ({
+        ...alternative,
+        price: priceFor(alternative, identification.variant, metric),
       })),
       ambiguous: match.ambiguous,
-      price: priceFor(match.card, identification.variant, metric),
+      price: priceFor(card, identification.variant, metric),
     });
   }
 

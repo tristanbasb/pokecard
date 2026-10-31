@@ -259,3 +259,51 @@ test('photo paths cannot escape the photos folder', async () => {
   const res = await app.inject({ method: 'GET', url: '/photos/..%2f..%2fpackage.json' });
   assert.notEqual(res.statusCode, 200);
 });
+
+test('percent-encoding does not get around the PIN', async () => {
+  const { app, db } = setup({ pin: '1234' });
+  const row = addToCollection(db, body);
+  for (const [method, url] of [
+    ['GET', '/%61pi/collection'],
+    ['GET', '/%61pi/export.csv'],
+    ['PUT', '/%61pi/settings'],
+    ['POST', '/%61pi/prices/refresh'],
+    ['DELETE', `/%61pi/collection/${row.id}`],
+    ['GET', '/api%2Fcollection'],
+  ]) {
+    const res = await app.inject({ method, url, payload: method === 'PUT' ? { priceMetric: 'low' } : undefined });
+    assert.ok([401, 404].includes(res.statusCode), `${method} ${url} gave ${res.statusCode}`);
+  }
+  assert.notEqual((await app.inject({ method: 'GET', url: '/%70hotos/1.jpg' })).statusCode, 200);
+  assert.equal(db.prepare('select count(*) n from collection').get().n, 1);
+});
+
+test('login stays reachable with a query string only through the login route', async () => {
+  const { app } = setup({ pin: '1234' });
+  const res = await app.inject({ method: 'POST', url: '/api/login?x=1', payload: { pin: '1234' } });
+  assert.equal(res.statusCode, 200);
+});
+
+test('a manual card re-sent with the same scan creates nothing new', async () => {
+  const { app, db } = setup();
+  db.prepare("INSERT INTO scans (id, created_at, photo_path, status) VALUES (7, 'x', '7.jpg', 'done')").run();
+  const payload = {
+    lang: 'fr', variant: 'normal', condition: 'Mint', scanId: 7, manualCard: { name: 'Promo rare' },
+  };
+  const first = await app.inject({ method: 'POST', url: '/api/collection', payload });
+  const second = await app.inject({ method: 'POST', url: '/api/collection', payload });
+  assert.equal(second.json().id, first.json().id);
+  assert.equal(second.json().quantity, 1);
+  assert.equal(db.prepare("select count(*) n from cards where id like 'manual-%'").get().n, 1);
+});
+
+test('two manual saves of the same card merge', async () => {
+  const { app, db } = setup();
+  const payload = {
+    lang: 'fr', variant: 'normal', condition: 'Mint', manualCard: { name: 'Promo rare', number: '12' },
+  };
+  await app.inject({ method: 'POST', url: '/api/collection', payload });
+  const second = await app.inject({ method: 'POST', url: '/api/collection', payload });
+  assert.equal(second.json().quantity, 2);
+  assert.equal(db.prepare('select count(*) n from collection').get().n, 1);
+});

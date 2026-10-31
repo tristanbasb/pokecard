@@ -156,6 +156,17 @@ export function renderScanView(root, { initialResult } = {}) {
       message,
       add,
       el('button', { className: 'button', onclick: openCamera }, 'Reprendre la photo'),
+      el('details', {},
+        el('summary', {}, 'Ce n\'est pas la bonne carte ? Chercher par nom'),
+        manualSearch({
+          name: card.name,
+          lang: card.lang,
+          scanId,
+          photoUrl: result.photoUrl,
+          identification,
+          onPick: showConfirmation,
+          onAdded: showAdded,
+        })),
     );
   }
 
@@ -202,7 +213,9 @@ function manualSearch({
     },
   });
 
-  const saveWithoutPrice = async () => {
+  const saveWithoutPrice = async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
     try {
       onAdded(await api.addToCollection({
         lang: langSelect.value,
@@ -212,7 +225,8 @@ function manualSearch({
         manualCard: { name: nameInput.value, setName: identification?.setName, number: identification?.number },
       }));
     } catch (error) {
-      fill(results, el('p', { className: 'notice notice--error', role: 'alert' }, error.message));
+      button.disabled = false;
+      results.prepend(el('p', { className: 'notice notice--error', role: 'alert' }, error.message));
     }
   };
 

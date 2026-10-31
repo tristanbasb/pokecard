@@ -39,7 +39,7 @@ function toRow(raw, metric) {
 
 const metricOf = (db) => getSetting(db, 'priceMetric', 'trend');
 
-function getRow(db, id) {
+export function getRow(db, id) {
   const raw = db.prepare(`${ROW_QUERY} WHERE collection.id = ?`).get(id);
   return raw ? toRow(raw, metricOf(db)) : null;
 }

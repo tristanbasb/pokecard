@@ -34,19 +34,14 @@ export async function findCard(identification, tcgdex) {
     return cards.filter(Boolean);
   };
 
-  if (number) {
-    for (const searched of names) {
-      const briefs = await tcgdex.searchCards({ name: searched, number, lang });
-      const exact = briefs.filter((brief) => normalizeNumber(brief.localId) === number);
-      if (exact.length > 0) return pickCard(identification, await details(exact));
-    }
-  }
-
+  // TCGdex's localId filter is a substring match on the raw number, so "TG3" misses "TG03": filter here instead.
+  let sameName = [];
   for (const searched of names) {
     const briefs = await tcgdex.searchCards({ name: searched, number: null, lang });
-    if (briefs.length > 0) {
-      return { ...pickCard(identification, await details(briefs)), ambiguous: true };
-    }
+    const exact = briefs.filter((brief) => number && normalizeNumber(brief.localId) === number);
+    if (exact.length > 0) return pickCard(identification, await details(exact));
+    if (sameName.length === 0) sameName = briefs;
   }
-  return pickCard(identification, []);
+  if (sameName.length === 0) return pickCard(identification, []);
+  return { ...pickCard(identification, await details(sameName)), ambiguous: true };
 }

@@ -39,7 +39,8 @@ async function request(path, { method = 'GET', json, blob } = {}) {
 export const login = (pin) => request('/api/login', { method: 'POST', json: { pin } });
 export const scan = (blob) => request('/api/scan', { method: 'POST', blob });
 export const retryScan = (id) => request(`/api/scan/${id}/retry`, { method: 'POST' });
-export const listPendingScans = () => request('/api/scans?status=pending');
+export const listScans = (status) => request(`/api/scans?status=${status}`);
+export const dismissScan = (id) => request(`/api/scans/${id}/dismiss`, { method: 'POST' });
 export const searchCards = (name, lang) => request(`/api/cards/search?${new URLSearchParams({ name, lang })}`);
 export const getCard = (id, lang) => request(`/api/cards/${encodeURIComponent(id)}?lang=${lang}`);
 export const addToCollection = (body) => request('/api/collection', { method: 'POST', json: body });

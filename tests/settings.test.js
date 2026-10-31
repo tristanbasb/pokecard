@@ -56,3 +56,31 @@ test('GET /api/scans lists only the requested status, without raw responses', as
   assert.equal(scans[0].name, 'Fouinar');
   assert.equal('response' in scans[0], false);
 });
+
+test('a read scan never added is listed as unconfirmed until added or dismissed', async () => {
+  const { app, db } = setup();
+  const open = insertScan(db, { photoPath: 'o.jpg' });
+  updateScan(db, open, { status: 'done', response: { identification: { name: 'Fouinar' } } });
+  const added = insertScan(db, { photoPath: 'a.jpg' });
+  updateScan(db, added, { status: 'done' });
+  addToCollection(db, { cardId: 'swsh3-136', lang: 'fr', variant: 'normal', condition: 'Mint', scanId: added });
+  const dismissed = insertScan(db, { photoPath: 'd.jpg' });
+  updateScan(db, dismissed, { status: 'done' });
+  assert.equal((await app.inject({ method: 'POST', url: `/api/scans/${dismissed}/dismiss` })).statusCode, 204);
+
+  const res = await app.inject({ method: 'GET', url: '/api/scans?status=unconfirmed' });
+  assert.deepEqual(res.json().map((scan) => scan.id), [open]);
+});
+
+test('dismissing an unknown scan is a 404', async () => {
+  const { app } = setup();
+  assert.equal((await app.inject({ method: 'POST', url: '/api/scans/99/dismiss' })).statusCode, 404);
+});
+
+test('a dismissed pending scan leaves the pending list', async () => {
+  const { app, db } = setup();
+  const id = insertScan(db, { photoPath: 'p.jpg' });
+  await app.inject({ method: 'POST', url: `/api/scans/${id}/dismiss` });
+  const res = await app.inject({ method: 'GET', url: '/api/scans?status=pending' });
+  assert.deepEqual(res.json(), []);
+});

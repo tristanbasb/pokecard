@@ -9,7 +9,7 @@ export function priceFor(card, variant, metric = 'trend') {
   return card.prices[`${metric}Holo`] ?? base;
 }
 
-const hasPrice = (card) => PRICE_FIELDS.some((field) => card.prices[field] !== null);
+export const hasPrice = (card) => PRICE_FIELDS.some((field) => card.prices[field] !== null);
 const isManual = (id) => id.startsWith('manual-');
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 

@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
-import { openDb, getCard, getScan } from '../src/db.js';
+import { openDb, getCard, getScan, upsertCard } from '../src/db.js';
 import { listCollection } from '../src/collection.js';
 import { ScanRefused, ScanInvalid } from '../src/claude.js';
 import { createScanner } from '../src/scan.js';
@@ -179,4 +179,41 @@ test('a photo with no readable card is done without card', async () => {
   const result = await scanner.scan(jpeg);
   assert.equal(result.card, null);
   assert.ok(result.message);
+});
+
+test('a rejected request stays pending, keeps its photo and is logged', async () => {
+  const logged = [];
+  const { db, photosDir, scanner } = setup({
+    log: (...args) => logged.push(args),
+    identify: async () => { throw new Anthropic.BadRequestError(400, {}, 'credit balance too low', new Headers()); },
+  });
+  const result = await scanner.scan(jpeg);
+  assert.equal(result.status, 'pending');
+  assert.match(result.message, /Claude a refusé la requête/);
+  assert.equal(getScan(db, result.scanId).status, 'pending');
+  assert.ok(existsSync(join(photosDir, `${result.scanId}.jpg`)));
+  assert.equal(logged.length, 1);
+});
+
+test('a failed read is logged too', async () => {
+  const logged = [];
+  const { scanner } = setup({
+    log: (...args) => logged.push(args),
+    identify: async () => { throw new ScanInvalid('bad'); },
+  });
+  await scanner.scan(jpeg);
+  assert.equal(logged.length, 1);
+});
+
+test('a scan keeps cached prices when tcgdex returns none', async () => {
+  const none = {
+    trend: null, trendHolo: null, low: null, lowHolo: null, avg30: null, avg30Holo: null, updatedAt: null,
+  };
+  const { db, scanner } = setup({
+    tcgdex: { ...okTcgdex, getCard: async () => ({ ...fouinar, prices: none }) },
+  });
+  upsertCard(db, fouinar);
+  const result = await scanner.scan(jpeg);
+  assert.equal(getCard(db, 'swsh3-136', 'fr').prices.trend, 0.04);
+  assert.equal(result.price, 0.23);
 });

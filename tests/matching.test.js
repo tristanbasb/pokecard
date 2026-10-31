@@ -150,3 +150,16 @@ test('findCard reads a padded tcgdex number', async () => {
   const result = await findCard(identified({ name: 'Dracaufeu', number: '25', printedTotal: null }), tcgdex);
   assert.equal(result.card, card);
 });
+
+test('findCard finds a zero-padded prefixed number despite the substring filter', async () => {
+  const target = { ...dracaufeuEx, id: 'swsh12pt5gg-TG03', number: 'TG03', printedTotal: 30 };
+  const others = Array.from({ length: 12 }, (_, i) => ({ id: `s-${i}`, localId: String(i + 1), name: 'Dracaufeu' }));
+  const all = [...others, { id: target.id, localId: 'TG03', name: 'Dracaufeu' }];
+  const tcgdex = fakeTcgdex(
+    ({ number }) => (number ? all.filter((card) => card.localId.includes(number)) : all),
+    { [target.id]: target },
+  );
+  const result = await findCard(identified({ name: 'Dracaufeu', number: 'TG03', printedTotal: null }), tcgdex);
+  assert.equal(result.card?.id, target.id);
+  assert.equal(result.ambiguous, false);
+});
